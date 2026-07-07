@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ciel时间记录日志</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="%23edff5f"/><text x="32" y="39" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="%2311100f">C</text></svg>' />
+    <link rel="stylesheet" href="styles.css?v=20260708-comments" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#logs" aria-label="回到时间记录">
+        <span class="brand-mark">C</span>
+        <span class="brand-copy single">
+          <strong>📝Ciel时间记录日志</strong>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="页面导航">
+        <a href="#logs">时间</a>
+        <a href="#calendar">日历</a>
+        <a href="#reminders">提醒</a>
+        <a href="#notes">札记</a>
+      </nav>
+      <time class="today-stamp" id="todayStamp"></time>
+    </header>
+
+    <main>
+      <section class="metrics" aria-label="今日摘要">
+        <article class="metric-card">
+          <span>已记录</span>
+          <strong id="loggedTotal">0h</strong>
+          <small>选中日期合计</small>
+        </article>
+        <article class="metric-card highlight">
+          <span>主线目标1</span>
+          <strong id="protectedTotal">0m</strong>
+          <small>作品集/学习自动合计</small>
+        </article>
+        <article class="metric-card">
+          <span>公司事项</span>
+          <strong id="workTotal">0m</strong>
+          <small>公司类型自动合计</small>
+        </article>
+        <article class="metric-card">
+          <span>其他时间</span>
+          <strong id="otherTotal">0m</strong>
+          <small>关系/运动/生活/休息</small>
+        </article>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="panel time-panel" id="logs">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">TIME LEDGER</p>
+              <h2>时间流水</h2>
+            </div>
+            <button class="button ghost" id="clearTodayButton" type="button">清空当天记录</button>
+          </div>
+
+          <form id="logForm" class="entry-form">
+            <label>
+              <span>日期</span>
+              <input id="logDate" name="date" type="date" required />
+            </label>
+            <label>
+              <span>开始</span>
+              <input name="start" type="time" required />
+            </label>
+            <label>
+              <span>结束</span>
+              <input name="end" type="time" required />
+            </label>
+            <label class="wide-field">
+              <span>内容</span>
+              <input name="title" type="text" placeholder="例如：作品集案例结构" required />
+            </label>
+            <label>
+              <span>类型</span>
+              <select name="category">
+                <option value="portfolio">作品集</option>
+                <option value="work">公司</option>
+                <option value="relationship">关系</option>
+                <option value="movement">运动</option>
+                <option value="life">生活</option>
+                <option value="rest">休息</option>
+                <option value="study">学习</option>
+              </select>
+            </label>
+            <label>
+              <span>精力</span>
+              <select name="energy">
+                <option value="5">高</option>
+                <option value="3">中</option>
+                <option value="1">低</option>
+              </select>
+            </label>
+            <button class="button primary" id="logSubmitButton" type="submit">记录时间</button>
+            <button class="button ghost is-hidden" id="cancelEditLogButton" type="button">取消修改</button>
+          </form>
+
+          <div class="color-legend" aria-label="颜色说明">
+            <span><i class="swatch portfolio"></i>主线/作品集</span>
+            <span><i class="swatch work"></i>公司</span>
+            <span><i class="swatch relationship"></i>关系</span>
+            <span><i class="swatch movement"></i>运动</span>
+            <span><i class="swatch life"></i>生活</span>
+            <span><i class="swatch rest"></i>休息</span>
+          </div>
+
+          <div class="timeline-wrap">
+            <div class="timeline-track" id="timelineTrack"></div>
+          </div>
+
+          <div class="log-list" id="logList"></div>
+        </article>
+
+        <article class="panel calendar-panel" id="calendar">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">CALENDAR</p>
+              <h2>月历</h2>
+            </div>
+            <div class="month-controls">
+              <button class="icon-button" id="prevMonth" type="button" aria-label="上个月">‹</button>
+              <strong id="monthLabel"></strong>
+              <button class="icon-button" id="nextMonth" type="button" aria-label="下个月">›</button>
+            </div>
+          </div>
+          <div class="weekday-row" aria-hidden="true">
+            <span>一</span>
+            <span>二</span>
+            <span>三</span>
+            <span>四</span>
+            <span>五</span>
+            <span>六</span>
+            <span>日</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+          <div class="event-list" id="eventList"></div>
+
+          <form id="eventForm" class="entry-form compact-form">
+            <label>
+              <span>日期</span>
+              <input id="eventDate" name="date" type="date" required />
+            </label>
+            <label>
+              <span>时间</span>
+              <input name="time" type="time" />
+            </label>
+            <label class="wide-field">
+              <span>日历</span>
+              <input name="title" type="text" placeholder="例如：作品集保护块" required />
+            </label>
+            <label>
+              <span>性质</span>
+              <select name="type">
+                <option value="protect">保护块</option>
+                <option value="work">公司</option>
+                <option value="life">生活</option>
+                <option value="relationship">关系</option>
+                <option value="movement">运动</option>
+              </select>
+            </label>
+            <button class="button primary" type="submit">写入日历</button>
+          </form>
+        </article>
+
+        <article class="panel reminders-panel" id="reminders">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">REMINDERS</p>
+              <h2>提醒事项</h2>
+            </div>
+          </div>
+
+          <form id="reminderForm" class="entry-form compact-form">
+            <label class="wide-field">
+              <span>事项</span>
+              <input name="title" type="text" placeholder="例如：睡前整理明天第一步" required />
+            </label>
+            <label>
+              <span>日期</span>
+              <input id="reminderDate" name="date" type="date" required />
+            </label>
+            <label>
+              <span>时间</span>
+              <input name="time" type="time" />
+            </label>
+            <button class="button primary" type="submit">添加提醒</button>
+          </form>
+
+          <div class="reminder-list" id="reminderList"></div>
+        </article>
+
+        <article class="panel notes-panel" id="notes">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">DAY NOTE</p>
+              <h2>日历札记</h2>
+            </div>
+            <time id="selectedDateLabel"></time>
+          </div>
+          <textarea id="dayNote" placeholder="今天的实际消耗、打断、取舍、明天要保护的时间。"></textarea>
+          <button class="button primary" id="saveNoteButton" type="button">保存札记</button>
+
+          <details class="focus-details">
+            <summary>精力版本</summary>
+            <div class="focus-stack">
+              <div>
+                <span>高精力版</span>
+                <strong id="highEnergyAction"></strong>
+              </div>
+              <div>
+                <span>中精力版</span>
+                <strong id="midEnergyAction"></strong>
+              </div>
+              <div>
+                <span>低精力版</span>
+                <strong id="lowEnergyAction"></strong>
+              </div>
+            </div>
+          </details>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js?v=20260708-comments"></script>
+  </body>
+</html>
