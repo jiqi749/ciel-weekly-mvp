@@ -1,124 +1,41 @@
-const STORAGE_KEY = "time-energy-board-v1";
+const STORAGE_KEY = "ciel-weekly-mvp-v3";
 
-const categoryLabels = {
-  portfolio: "作品集",
-  work: "公司",
-  relationship: "关系",
-  movement: "运动",
-  life: "生活",
-  rest: "休息",
-  study: "学习",
-};
-
-const eventLabels = {
-  protect: "保护块",
-  work: "公司",
-  life: "生活",
-  relationship: "关系",
-  movement: "运动",
+const typeMeta = {
+  portfolio: { label: "作品集", group: "personal" },
+  relationship: { label: "共同时间", group: "personal" },
+  climbing: { label: "攀岩", group: "personal" },
+  health: { label: "健康 / 康复", group: "personal" },
+  life: { label: "生活必要", group: "personal" },
+  work: { label: "工作", group: "work" },
 };
 
 const $ = (selector) => document.querySelector(selector);
-const mainLineCategories = ["portfolio", "study"];
-const workCategories = ["work"];
-const dayStartHour = 6;
-const dayEndHour = 24;
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+const now = new Date();
 
-const today = new Date();
-let selectedDate = toDateKey(today);
-let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-let editingLogId = null;
-let activeDrag = null;
+let viewedWeekStart = startOfWeek(now);
+let todayFilter = "all";
 
 const defaultState = {
-  calibration: {
-    mainGoal: "作品集",
-    minimumAction: "改一页案例或写 5 条项目说明",
-    energy: 3,
-    noise: 3,
-    high: "完整推进一个项目案例",
-    mid: "整理素材并确定页面结构",
-    low: "找 3 个参考，写下下一步",
-  },
-  logs: [
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(today),
-      start: "06:40",
-      end: "07:20",
-      title: "作品集案例拆解",
-      category: "portfolio",
-      energy: 5,
-    },
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(today),
-      start: "09:30",
-      end: "11:10",
-      title: "公司项目推进",
-      category: "work",
-      energy: 3,
-    },
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(today),
-      start: "14:20",
-      end: "15:00",
-      title: "飞书沟通与临时决策",
-      category: "work",
-      energy: 1,
-    },
-  ],
-  events: [
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(today),
-      time: "20:30",
-      title: "作品集保护块",
-      type: "protect",
-    },
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(addDays(today, 1)),
-      time: "19:30",
-      title: "攀岩",
-      type: "movement",
-    },
-  ],
-  reminders: [
-    {
-      id: crypto.randomUUID(),
-      date: toDateKey(today),
-      time: "22:20",
-      title: "睡前写明天第一保护块",
-      done: false,
-    },
-  ],
-  notes: {
-    [toDateKey(today)]: "今天观察：哪些事情偷走了好精力？哪些时间块值得保护？",
-  },
+  mode: "normal",
+  plans: [],
+  inbox: [],
+  reviews: {},
 };
 
 let state = loadState();
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultState));
-    return structuredClone(defaultState);
-  }
-
+  if (!raw) return structuredClone(defaultState);
   try {
     const parsed = JSON.parse(raw);
-    const base = structuredClone(defaultState);
     return {
-      ...base,
+      ...structuredClone(defaultState),
       ...parsed,
-      calibration: { ...base.calibration, ...(parsed.calibration || {}) },
-      notes: { ...base.notes, ...(parsed.notes || {}) },
-      logs: parsed.logs || base.logs,
-      events: parsed.events || base.events,
-      reminders: parsed.reminders || base.reminders,
+      plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+      inbox: Array.isArray(parsed.inbox) ? parsed.inbox : [],
+      reviews: parsed.reviews || {},
     };
   } catch {
     return structuredClone(defaultState);
@@ -129,11 +46,19 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function uid() {
+  return crypto.randomUUID();
+}
+
 function toDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function fromDateKey(key) {
+  return new Date(`${key}T00:00:00`);
 }
 
 function addDays(date, amount) {
@@ -142,577 +67,446 @@ function addDays(date, amount) {
   return next;
 }
 
-function parseMinutes(time) {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
+function startOfWeek(date) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = next.getDay() || 7;
+  next.setDate(next.getDate() - day + 1);
+  return next;
 }
 
-function minutesBetween(start, end) {
-  const startMinutes = parseMinutes(start);
-  const endMinutes = parseMinutes(end);
-  return Math.max(0, endMinutes - startMinutes);
+function isSameWeek(dateKey, weekStart = viewedWeekStart) {
+  const key = toDateKey(startOfWeek(fromDateKey(dateKey)));
+  return key === toDateKey(weekStart);
 }
 
-function formatDuration(minutes) {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+function formatDay(date) {
+  return new Intl.DateTimeFormat("zh-CN", { weekday: "short", month: "numeric", day: "numeric" }).format(date);
 }
 
-function formatDateLabel(dateKey) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  }).format(date);
-}
-
-function init() {
-  $("#todayStamp").textContent = new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-  }).format(today);
-
-  $("#logDate").value = selectedDate;
-  $("#eventDate").value = selectedDate;
-  $("#reminderDate").value = selectedDate;
-
-  bindForms();
-  render();
-}
-
-function bindForms() {
-  $("#logForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const start = data.get("start");
-    const end = data.get("end");
-    if (minutesBetween(start, end) <= 0) return;
-
-    const payload = {
-      date: data.get("date"),
-      start,
-      end,
-      title: data.get("title").trim(),
-      category: data.get("category"),
-      energy: Number(data.get("energy")),
-    };
-
-    if (editingLogId) {
-      const index = state.logs.findIndex((log) => log.id === editingLogId);
-      if (index >= 0) state.logs[index] = { ...state.logs[index], ...payload };
-      editingLogId = null;
-    } else {
-      state.logs.push({ id: crypto.randomUUID(), ...payload });
-    }
-
-    selectedDate = payload.date;
-    saveState();
-    resetLogForm();
-    render();
-  });
-
-  $("#cancelEditLogButton").addEventListener("click", resetLogForm);
-
-  $("#eventForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    state.events.push({
-      id: crypto.randomUUID(),
-      date: data.get("date"),
-      time: data.get("time"),
-      title: data.get("title").trim(),
-      type: data.get("type"),
-    });
-    selectedDate = data.get("date");
-    visibleMonth = new Date(`${selectedDate}T00:00:00`);
-    visibleMonth.setDate(1);
-    saveState();
-    event.currentTarget.reset();
-    $("#eventDate").value = selectedDate;
-    render();
-  });
-
-  $("#reminderForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    state.reminders.push({
-      id: crypto.randomUUID(),
-      date: data.get("date"),
-      time: data.get("time"),
-      title: data.get("title").trim(),
-      done: false,
-    });
-    saveState();
-    event.currentTarget.reset();
-    $("#reminderDate").value = selectedDate;
-    render();
-  });
-
-  $("#prevMonth").addEventListener("click", () => {
-    visibleMonth.setMonth(visibleMonth.getMonth() - 1);
-    renderCalendar();
-  });
-
-  $("#nextMonth").addEventListener("click", () => {
-    visibleMonth.setMonth(visibleMonth.getMonth() + 1);
-    renderCalendar();
-  });
-
-  $("#saveNoteButton").addEventListener("click", () => {
-    state.notes[selectedDate] = $("#dayNote").value.trim();
-    saveState();
-    renderNotes();
-  });
-
-  $("#clearTodayButton").addEventListener("click", () => {
-    if (!window.confirm("清空当前日期的所有时间记录？")) return;
-    state.logs = state.logs.filter((log) => log.date !== selectedDate);
-    saveState();
-    render();
-  });
-}
-
-function render() {
-  renderFocusActions();
-  renderMetrics();
-  renderLogs();
-  renderCalendar();
-  renderEventsForSelectedDate();
-  renderReminders();
-  renderNotes();
-}
-
-function renderFocusActions() {
-  $("#highEnergyAction").textContent = state.calibration.high;
-  $("#midEnergyAction").textContent = state.calibration.mid;
-  $("#lowEnergyAction").textContent = state.calibration.low;
-}
-
-function renderMetrics() {
-  const logs = state.logs.filter((log) => log.date === selectedDate);
-  const total = logs.reduce((sum, log) => sum + minutesBetween(log.start, log.end), 0);
-  const protectedMinutes = logs
-    .filter((log) => mainLineCategories.includes(log.category))
-    .reduce((sum, log) => sum + minutesBetween(log.start, log.end), 0);
-  const workMinutes = logs
-    .filter((log) => workCategories.includes(log.category))
-    .reduce((sum, log) => sum + minutesBetween(log.start, log.end), 0);
-  const otherMinutes = Math.max(0, total - protectedMinutes - workMinutes);
-
-  $("#loggedTotal").textContent = formatDuration(total);
-  $("#protectedTotal").textContent = formatDuration(protectedMinutes);
-  $("#workTotal").textContent = formatDuration(workMinutes);
-  $("#otherTotal").textContent = formatDuration(otherMinutes);
-}
-
-function renderLogs() {
-  const logs = state.logs
-    .filter((log) => log.date === selectedDate)
-    .sort((a, b) => a.start.localeCompare(b.start));
-
-  const track = $("#timelineTrack");
-  track.innerHTML = "";
-  track.addEventListener("dragover", allowTimelineDrop);
-  track.addEventListener("drop", dropNativeTimelineDrag);
-  const rows = new Map();
-
-  for (let hour = dayStartHour; hour < dayEndHour; hour += 1) {
-    const row = document.createElement("div");
-    row.className = "hour-row";
-    row.innerHTML = `
-      <div class="hour-label">${String(hour).padStart(2, "0")}</div>
-      <div class="hour-slots" data-hour="${hour}">
-        <div class="hour-cell"></div>
-        <div class="hour-cell"></div>
-        <div class="hour-cell"></div>
-        <div class="hour-cell"></div>
-        <div class="hour-cell"></div>
-        <div class="hour-cell"></div>
-      </div>
-    `;
-    rows.set(hour, row.querySelector(".hour-slots"));
-    track.append(row);
-  }
-
-  logs.forEach((log) => {
-    renderLogSegments(log, rows);
-  });
-
-  const list = $("#logList");
-  list.innerHTML = "";
-  if (!logs.length) {
-    list.innerHTML = `<div class="empty-state">今天还没有时间记录。</div>`;
-    return;
-  }
-
-  logs.forEach((log) => {
-    const item = document.createElement("div");
-    item.className = "log-item";
-    item.innerHTML = `
-      <time>${log.start}-${log.end}</time>
-      <strong>${escapeHtml(log.title)}</strong>
-      <div class="log-actions">
-        <span class="tag">${categoryLabels[log.category]}</span>
-        <button class="edit-button" type="button">修改</button>
-        <button class="delete-button" type="button">删除</button>
-      </div>
-    `;
-    item.querySelector(".edit-button").addEventListener("click", () => startLogEdit(log.id));
-    item.querySelector(".delete-button").addEventListener("click", () => {
-      state.logs = state.logs.filter((entry) => entry.id !== log.id);
-      saveState();
-      render();
-    });
-    list.append(item);
-  });
-}
-
-function renderLogSegments(log, rows) {
-  const dayStart = dayStartHour * 60;
-  const dayEnd = dayEndHour * 60;
-  const clippedStart = Math.max(dayStart, parseMinutes(log.start));
-  const clippedEnd = Math.min(dayEnd, parseMinutes(log.end));
-  if (clippedEnd <= clippedStart) return;
-
-  for (let hour = Math.floor(clippedStart / 60); hour <= Math.floor((clippedEnd - 1) / 60); hour += 1) {
-    const slot = rows.get(hour);
-    if (!slot) continue;
-    const segmentStart = Math.max(clippedStart, hour * 60);
-    const segmentEnd = Math.min(clippedEnd, (hour + 1) * 60);
-    const segment = document.createElement("button");
-    segment.type = "button";
-    segment.className = `time-segment ${log.category}`;
-    segment.dataset.id = log.id;
-    segment.draggable = true;
-    segment.style.left = `${((segmentStart - hour * 60) / 60) * 100}%`;
-    segment.style.width = `${Math.max(5, ((segmentEnd - segmentStart) / 60) * 100)}%`;
-    segment.title = `${log.title} ${log.start}-${log.end}`;
-    segment.innerHTML = `
-      <strong>${escapeHtml(log.title)}</strong>
-      <span>${log.start}-${log.end}</span>
-    `;
-    segment.addEventListener("dblclick", () => startLogEdit(log.id));
-    segment.addEventListener("pointerdown", startTimelineDrag);
-    segment.addEventListener("pointermove", moveTimelineDrag);
-    segment.addEventListener("pointerup", endTimelineDrag);
-    segment.addEventListener("pointercancel", cancelTimelineDrag);
-    segment.addEventListener("mousedown", startTimelineMouseDrag);
-    segment.addEventListener("dragstart", startNativeTimelineDrag);
-    segment.addEventListener("dragend", endNativeTimelineDrag);
-    slot.append(segment);
-  }
-}
-
-function resetLogForm() {
-  editingLogId = null;
-  $("#logForm").reset();
-  $("#logDate").value = selectedDate;
-  $("#logSubmitButton").textContent = "记录时间";
-  $("#cancelEditLogButton").classList.add("is-hidden");
-}
-
-function startLogEdit(id) {
-  const log = state.logs.find((entry) => entry.id === id);
-  if (!log) return;
-  editingLogId = id;
-  const form = $("#logForm");
-  form.elements.date.value = log.date;
-  form.elements.start.value = log.start;
-  form.elements.end.value = log.end;
-  form.elements.title.value = log.title;
-  form.elements.category.value = log.category;
-  form.elements.energy.value = String(log.energy);
-  $("#logSubmitButton").textContent = "保存修改";
-  $("#cancelEditLogButton").classList.remove("is-hidden");
-  form.scrollIntoView({ block: "center", behavior: "smooth" });
-}
-
-function startTimelineDrag(event) {
-  if (event.button !== 0) return;
-  const id = event.currentTarget.dataset.id;
-  const log = state.logs.find((entry) => entry.id === id);
-  if (!log) return;
-
-  activeDrag = {
-    id,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    moved: false,
-    duration: minutesBetween(log.start, log.end),
-    element: event.currentTarget,
-  };
-  event.currentTarget.setPointerCapture(event.pointerId);
-  event.currentTarget.classList.add("is-dragging");
-}
-
-function startTimelineMouseDrag(event) {
-  if (event.button !== 0 || activeDrag) return;
-  const id = event.currentTarget.dataset.id;
-  const log = state.logs.find((entry) => entry.id === id);
-  if (!log) return;
-
-  activeDrag = {
-    id,
-    pointerId: "mouse",
-    startX: event.clientX,
-    startY: event.clientY,
-    moved: false,
-    duration: minutesBetween(log.start, log.end),
-    element: event.currentTarget,
-  };
-  event.currentTarget.classList.add("is-dragging");
-  document.addEventListener("mousemove", moveTimelineMouseDrag);
-  document.addEventListener("mouseup", endTimelineMouseDrag, { once: true });
-  event.preventDefault();
-}
-
-function startNativeTimelineDrag(event) {
-  const id = event.currentTarget.dataset.id;
-  const log = state.logs.find((entry) => entry.id === id);
-  if (!log) return;
-
-  activeDrag = {
-    id,
-    pointerId: "native",
-    startX: event.clientX,
-    startY: event.clientY,
-    moved: true,
-    duration: minutesBetween(log.start, log.end),
-    element: event.currentTarget,
-  };
-  event.currentTarget.classList.add("is-dragging");
-  event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData("text/plain", id);
-}
-
-function moveTimelineDrag(event) {
-  if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-  const distance = Math.abs(event.clientX - activeDrag.startX) + Math.abs(event.clientY - activeDrag.startY);
-  if (distance > 5) activeDrag.moved = true;
-}
-
-function moveTimelineMouseDrag(event) {
-  if (!activeDrag || activeDrag.pointerId !== "mouse") return;
-  const distance = Math.abs(event.clientX - activeDrag.startX) + Math.abs(event.clientY - activeDrag.startY);
-  if (distance > 5) activeDrag.moved = true;
-}
-
-function endTimelineDrag(event) {
-  if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-  const drag = activeDrag;
-  activeDrag = null;
-  drag.element.classList.remove("is-dragging");
-  if (drag.element.hasPointerCapture?.(event.pointerId)) {
-    drag.element.releasePointerCapture(event.pointerId);
-  }
-  if (!drag.moved) return;
-
-  finishTimelineDrag(drag, event.clientX, event.clientY);
-}
-
-function endTimelineMouseDrag(event) {
-  document.removeEventListener("mousemove", moveTimelineMouseDrag);
-  if (!activeDrag || activeDrag.pointerId !== "mouse") return;
-  const drag = activeDrag;
-  activeDrag = null;
-  drag.element.classList.remove("is-dragging");
-  if (!drag.moved) return;
-
-  finishTimelineDrag(drag, event.clientX, event.clientY);
-}
-
-function allowTimelineDrop(event) {
-  if (!activeDrag || activeDrag.pointerId !== "native") return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = "move";
-}
-
-function dropNativeTimelineDrag(event) {
-  if (!activeDrag || activeDrag.pointerId !== "native") return;
-  event.preventDefault();
-  const drag = activeDrag;
-  activeDrag = null;
-  drag.element.classList.remove("is-dragging");
-  finishTimelineDrag(drag, event.clientX, event.clientY);
-}
-
-function endNativeTimelineDrag() {
-  if (!activeDrag || activeDrag.pointerId !== "native") return;
-  activeDrag.element.classList.remove("is-dragging");
-  activeDrag = null;
-}
-
-function finishTimelineDrag(drag, clientX, clientY) {
-  const startMinutes = getTimelineMinutesFromPoint(clientX, clientY, drag.duration);
-  const log = state.logs.find((entry) => entry.id === drag.id);
-  if (!log) return;
-  log.start = minutesToTime(startMinutes);
-  log.end = minutesToTime(startMinutes + drag.duration);
-  saveState();
-  render();
-}
-
-function cancelTimelineDrag(event) {
-  if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-  activeDrag.element.classList.remove("is-dragging");
-  activeDrag = null;
-}
-
-function getTimelineMinutesFromPoint(clientX, clientY, duration) {
-  const track = $("#timelineTrack");
-  const rect = track.getBoundingClientRect();
-  const rowCount = dayEndHour - dayStartHour;
-  const rowHeight = rect.height / rowCount;
-  const rowIndex = clamp(Math.floor((clientY - rect.top) / rowHeight), 0, rowCount - 1);
-  const hour = dayStartHour + rowIndex;
-  const slotsLeft = rect.left + 54;
-  const slotsWidth = Math.max(1, rect.width - 54);
-  const x = clamp(clientX - slotsLeft, 0, slotsWidth);
-  const minute = clamp(Math.round(((x / slotsWidth) * 60) / 10) * 10, 0, 50);
-  const maxStart = dayEndHour * 60 - duration;
-  return clamp(hour * 60 + minute, dayStartHour * 60, maxStart);
-}
-
-function minutesToTime(minutes) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function renderCalendar() {
-  const label = new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-  }).format(visibleMonth);
-  $("#monthLabel").textContent = label;
-
-  const grid = $("#calendarGrid");
-  grid.innerHTML = "";
-
-  const first = new Date(visibleMonth);
-  const firstDay = first.getDay() === 0 ? 7 : first.getDay();
-  const gridStart = addDays(first, -(firstDay - 1));
-
-  for (let index = 0; index < 42; index += 1) {
-    const date = addDays(gridStart, index);
-    const key = toDateKey(date);
-    const dayEvents = state.events.filter((event) => event.date === key);
-    const dayReminders = state.reminders.filter((reminder) => reminder.date === key && !reminder.done);
-    const cell = document.createElement("button");
-    cell.type = "button";
-    cell.className = [
-      "day-cell",
-      date.getMonth() !== visibleMonth.getMonth() ? "is-muted" : "",
-      key === toDateKey(today) ? "is-today" : "",
-      key === selectedDate ? "is-selected" : "",
-    ].join(" ");
-    cell.innerHTML = `
-      <span class="day-number">${date.getDate()}</span>
-      ${dayEvents.slice(0, 2).map((event) => `<span class="day-pill ${event.type}">${escapeHtml(event.title)}</span>`).join("")}
-      ${dayReminders.slice(0, 1).map((reminder) => `<span class="day-pill rest">${escapeHtml(reminder.title)}</span>`).join("")}
-    `;
-    cell.addEventListener("click", () => {
-      selectedDate = key;
-      $("#logDate").value = key;
-      $("#eventDate").value = key;
-      $("#reminderDate").value = key;
-      render();
-    });
-    grid.append(cell);
-  }
-}
-
-function renderEventsForSelectedDate() {
-  const events = state.events
-    .filter((event) => event.date === selectedDate)
-    .sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
-  const list = $("#eventList");
-  list.innerHTML = "";
-
-  if (!events.length) {
-    list.innerHTML = `<div class="empty-state">${formatDateLabel(selectedDate)} 暂无日历安排。</div>`;
-    return;
-  }
-
-  events.forEach((event) => {
-    const item = document.createElement("div");
-    item.className = "event-item";
-    item.innerHTML = `
-      <div class="event-meta">${event.time || "全天"}</div>
-      <strong>${escapeHtml(event.title)}</strong>
-      <div class="log-actions">
-        <span class="tag">${eventLabels[event.type]}</span>
-        <button class="delete-button" type="button">删除</button>
-      </div>
-    `;
-    item.querySelector(".delete-button").addEventListener("click", () => {
-      state.events = state.events.filter((entry) => entry.id !== event.id);
-      saveState();
-      renderCalendar();
-      renderEventsForSelectedDate();
-    });
-    list.append(item);
-  });
-}
-
-function renderReminders() {
-  const reminders = [...state.reminders].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
-  const list = $("#reminderList");
-  list.innerHTML = "";
-  if (!reminders.length) {
-    list.innerHTML = `<div class="empty-state">暂无提醒事项。</div>`;
-    return;
-  }
-
-  reminders.forEach((reminder) => {
-    const item = document.createElement("div");
-    item.className = `reminder-item ${reminder.done ? "is-done" : ""}`;
-    item.innerHTML = `
-      <button type="button" aria-label="切换完成状态"></button>
-      <div>
-        <strong>${escapeHtml(reminder.title)}</strong>
-        <div class="reminder-meta">${formatDateLabel(reminder.date)} ${reminder.time || ""}</div>
-      </div>
-      <button class="delete-button" type="button">删除</button>
-    `;
-    item.querySelector("button").addEventListener("click", () => {
-      reminder.done = !reminder.done;
-      saveState();
-      renderReminders();
-      renderCalendar();
-    });
-    item.querySelector(".delete-button").addEventListener("click", () => {
-      state.reminders = state.reminders.filter((entry) => entry.id !== reminder.id);
-      saveState();
-      renderReminders();
-      renderCalendar();
-    });
-    list.append(item);
-  });
-}
-
-function renderNotes() {
-  $("#selectedDateLabel").textContent = formatDateLabel(selectedDate);
-  $("#dayNote").value = state.notes[selectedDate] || "";
+function formatWeekRange(start) {
+  const end = addDays(start, 6);
+  return `${start.getMonth() + 1}.${start.getDate()} — ${end.getMonth() + 1}.${end.getDate()}`;
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function timeLabel(plan) {
+  const hours = Math.floor(plan.duration / 60);
+  const minutes = plan.duration % 60;
+  const duration = hours ? `${hours}h${minutes ? `${minutes}m` : ""}` : `${minutes}m`;
+  return `${plan.start} · ${duration}`;
+}
+
+function init() {
+  $("#todayLabel").textContent = new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(now);
+
+  $("#planDate").value = toDateKey(now);
+  bindEvents();
+  render();
+}
+
+function bindEvents() {
+  $$("[data-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.mode = button.dataset.mode;
+      saveState();
+      renderMode();
+      renderCompass();
+    });
+  });
+
+  $$("#todayFilters button").forEach((button) => {
+    button.addEventListener("click", () => {
+      todayFilter = button.dataset.filter;
+      $$("#todayFilters button").forEach((item) => item.classList.toggle("active", item === button));
+      renderToday();
+    });
+  });
+
+  $("#previousWeek").addEventListener("click", () => {
+    viewedWeekStart = addDays(viewedWeekStart, -7);
+    renderWeek();
+    renderCompass();
+  });
+
+  $("#nextWeek").addEventListener("click", () => {
+    viewedWeekStart = addDays(viewedWeekStart, 7);
+    renderWeek();
+    renderCompass();
+  });
+
+  $("#currentWeek").addEventListener("click", () => {
+    viewedWeekStart = startOfWeek(now);
+    renderWeek();
+    renderCompass();
+  });
+
+  $("#planType").addEventListener("change", renderConfirmedField);
+  $("#planForm").addEventListener("submit", savePlanFromForm);
+  $("#cancelPlanEdit").addEventListener("click", resetPlanForm);
+  $("#inboxForm").addEventListener("submit", captureInbox);
+  $("#reviewForm").addEventListener("submit", saveReview);
+  $("#completeForm").addEventListener("submit", completePlan);
+  $("#closeCompleteDialog").addEventListener("click", () => $("#completeDialog").close());
+  $("#exportButton").addEventListener("click", exportBackup);
+}
+
+function render() {
+  renderMode();
+  renderToday();
+  renderWeek();
+  renderCompass();
+  renderInbox();
+  renderReview();
+  renderConfirmedField();
+}
+
+function renderMode() {
+  $$("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
+  $("#modeHint").textContent = state.mode === "normal"
+    ? "按普通目标运行；变化发生时重新安排，不牺牲睡眠。"
+    : "出差、高压或恢复期：主动降级目标，不把未完成当失败。";
+}
+
+function plansForWeek() {
+  return state.plans.filter((plan) => isSameWeek(plan.date));
+}
+
+function renderCompass() {
+  const weekPlans = plansForWeek();
+  const count = (type, completedOnly = false) => weekPlans.filter((plan) => (
+    plan.type === type && (!completedOnly || plan.status === "done")
+  )).length;
+  const relationshipDays = new Set(weekPlans.filter((plan) => plan.type === "relationship").map((plan) => plan.date)).size;
+  const suffix = state.mode === "special" ? " · 已降级" : "";
+  $("#portfolioProgress").textContent = `${count("portfolio")} / 3${suffix}`;
+  $("#relationshipProgress").textContent = `${relationshipDays} 天${suffix}`;
+  $("#climbingProgress").textContent = `${count("climbing")} / 3${suffix}`;
+}
+
+function renderToday() {
+  const todayKey = toDateKey(now);
+  const plans = state.plans
+    .filter((plan) => plan.date === todayKey)
+    .filter((plan) => todayFilter === "all" || typeMeta[plan.type].group === todayFilter)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const list = $("#todayList");
+  list.innerHTML = "";
+
+  if (!plans.length) {
+    list.innerHTML = `<div class="empty-state"><strong>今天还没有安排。</strong><span>先看本周，再决定今天真正要保护什么。</span><button type="button" id="emptyAddPlan">安排时间</button></div>`;
+    $("#emptyAddPlan").addEventListener("click", () => openPlanForDate(todayKey));
+    return;
+  }
+
+  plans.forEach((plan) => list.append(createPlanCard(plan, true)));
+}
+
+function renderWeek() {
+  $("#weekRange").textContent = formatWeekRange(viewedWeekStart);
+  renderWeekSummary();
+  const grid = $("#weekGrid");
+  grid.innerHTML = "";
+  const todayKey = toDateKey(now);
+
+  for (let index = 0; index < 7; index += 1) {
+    const date = addDays(viewedWeekStart, index);
+    const key = toDateKey(date);
+    const plans = state.plans.filter((plan) => plan.date === key).sort((a, b) => a.start.localeCompare(b.start));
+    const column = document.createElement("article");
+    column.className = `day-column ${key === todayKey ? "is-today" : ""}`;
+    column.innerHTML = `
+      <button class="day-heading" type="button">
+        <span>${new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(date)}</span>
+        <strong>${date.getDate()}</strong>
+      </button>
+      <div class="day-plans"></div>
+      <button class="day-add" type="button">＋</button>
+    `;
+    column.querySelector(".day-heading").addEventListener("click", () => openPlanForDate(key));
+    column.querySelector(".day-add").addEventListener("click", () => openPlanForDate(key));
+    const planList = column.querySelector(".day-plans");
+    if (!plans.length) planList.innerHTML = `<span class="day-empty">留白</span>`;
+    plans.forEach((plan) => planList.append(createPlanCard(plan, false)));
+    grid.append(column);
+  }
+}
+
+function renderWeekSummary() {
+  const plans = plansForWeek();
+  const portfolio = plans.filter((plan) => plan.type === "portfolio").length;
+  const climbing = plans.filter((plan) => plan.type === "climbing").length;
+  const unconfirmed = plans.filter((plan) => ["relationship", "climbing"].includes(plan.type) && !plan.confirmed).length;
+  const weekdays = new Set(plans.filter((plan) => {
+    const day = fromDateKey(plan.date).getDay();
+    return day >= 1 && day <= 5 && ["portfolio", "climbing"].includes(plan.type);
+  }).map((plan) => plan.date)).size;
+
+  const messages = [];
+  if (portfolio < 3 && state.mode === "normal") messages.push(`作品集还差 ${3 - portfolio} 段`);
+  if (climbing < 3 && state.mode === "normal") messages.push(`攀岩还差 ${3 - climbing} 次`);
+  if (unconfirmed) messages.push(`${unconfirmed} 个共同安排尚未确认`);
+  if (weekdays >= 5) messages.push("5 个工作日晚间已占满，给意外留一个周末缓冲");
+  if (!messages.length) messages.push("关键时间已经有位置；别再用小事把它们挤掉。");
+
+  $("#weekSummary").innerHTML = messages.map((message) => `<span>${escapeHtml(message)}</span>`).join("");
+}
+
+function createPlanCard(plan, expanded) {
+  const card = document.createElement("div");
+  card.className = `plan-card ${plan.type} ${plan.status === "done" ? "is-done" : ""}`;
+  const confirmation = ["relationship", "climbing"].includes(plan.type)
+    ? `<span class="confirmation ${plan.confirmed ? "confirmed" : ""}">${plan.confirmed ? "已确认" : "待商量"}</span>`
+    : "";
+  card.innerHTML = `
+    <div class="plan-meta">
+      <span>${timeLabel(plan)}</span>
+      ${confirmation}
+    </div>
+    <strong>${escapeHtml(plan.title)}</strong>
+    ${plan.outcome ? `<p class="plan-outcome">留下：${escapeHtml(plan.outcome)}</p>` : ""}
+    <div class="plan-actions">
+      <button class="complete-action" type="button">${plan.status === "done" ? "已完成" : "完成"}</button>
+      <button class="edit-action" type="button">调整</button>
+      ${expanded || plan.type === "portfolio" ? `<button class="move-action" type="button">改期</button>` : ""}
+      <button class="delete-action" type="button" aria-label="删除">×</button>
+    </div>
+  `;
+  card.querySelector(".complete-action").addEventListener("click", () => openCompleteDialog(plan));
+  card.querySelector(".edit-action").addEventListener("click", () => editPlan(plan));
+  card.querySelector(".move-action")?.addEventListener("click", () => movePlan(plan));
+  card.querySelector(".delete-action").addEventListener("click", () => deletePlan(plan.id));
+  return card;
+}
+
+function renderConfirmedField() {
+  const type = $("#planType").value;
+  $("#confirmedField").classList.toggle("is-hidden", !["relationship", "climbing"].includes(type));
+}
+
+function savePlanFromForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const editingId = data.get("editingId");
+  const sourceInboxId = data.get("sourceInboxId");
+  const payload = {
+    date: data.get("date"),
+    start: data.get("start"),
+    duration: Number(data.get("duration")),
+    type: data.get("type"),
+    title: data.get("title").trim(),
+    confirmed: data.get("confirmed") === "on",
+  };
+
+  if (editingId) {
+    const plan = state.plans.find((item) => item.id === editingId);
+    if (plan) Object.assign(plan, payload);
+  } else {
+    state.plans.push({ id: uid(), status: "planned", outcome: "", ...payload });
+  }
+
+  if (sourceInboxId) {
+    const sourceItem = state.inbox.find((item) => item.id === sourceInboxId);
+    if (sourceItem) sourceItem.status = "scheduled";
+  }
+
+  viewedWeekStart = startOfWeek(fromDateKey(payload.date));
+  saveState();
+  resetPlanForm();
+  render();
+}
+
+function openPlanForDate(dateKey, defaults = {}) {
+  resetPlanForm();
+  $("#planDate").value = dateKey;
+  if (defaults.type) $("#planType").value = defaults.type;
+  if (defaults.title) $("#planTitle").value = defaults.title;
+  if (defaults.sourceInboxId) $("#planForm").elements.sourceInboxId.value = defaults.sourceInboxId;
+  renderConfirmedField();
+  $("#addPlanDetails").open = true;
+  $("#addPlanDetails").scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => $("#planForm").elements.start.focus(), 350);
+}
+
+function editPlan(plan) {
+  const form = $("#planForm");
+  form.elements.editingId.value = plan.id;
+  form.elements.date.value = plan.date;
+  form.elements.start.value = plan.start;
+  form.elements.duration.value = String(plan.duration);
+  form.elements.type.value = plan.type;
+  form.elements.title.value = plan.title;
+  form.elements.confirmed.checked = Boolean(plan.confirmed);
+  $("#cancelPlanEdit").classList.remove("is-hidden");
+  $("#addPlanDetails").open = true;
+  renderConfirmedField();
+  $("#addPlanDetails").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function resetPlanForm() {
+  const form = $("#planForm");
+  form.reset();
+  form.elements.editingId.value = "";
+  form.elements.sourceInboxId.value = "";
+  form.elements.date.value = toDateKey(now);
+  form.elements.duration.value = "90";
+  $("#cancelPlanEdit").classList.add("is-hidden");
+  renderConfirmedField();
+}
+
+function movePlan(plan) {
+  const nextDate = window.prompt("移动到哪一天？请输入 YYYY-MM-DD", plan.date);
+  if (!nextDate || !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
+  const nextTime = window.prompt("几点开始？", plan.start);
+  if (!nextTime || !/^\d{2}:\d{2}$/.test(nextTime)) return;
+  plan.date = nextDate;
+  plan.start = nextTime;
+  if (["relationship", "climbing"].includes(plan.type)) plan.confirmed = false;
+  saveState();
+  render();
+}
+
+function deletePlan(id) {
+  if (!window.confirm("删除这段安排？")) return;
+  state.plans = state.plans.filter((plan) => plan.id !== id);
+  saveState();
+  render();
+}
+
+function openCompleteDialog(plan) {
+  if (plan.status === "done") {
+    plan.status = "planned";
+    plan.outcome = "";
+    saveState();
+    render();
+    return;
+  }
+  const form = $("#completeForm");
+  form.reset();
+  form.elements.planId.value = plan.id;
+  $("#completeTitle").textContent = `完成：${plan.title}`;
+  const needsEvidence = plan.type === "portfolio";
+  $("#outcomeLabel").textContent = needsEvidence ? "实际留下了什么？作品集需要具体证据" : "实际完成了什么？（可选）";
+  form.elements.outcome.required = needsEvidence;
+  $("#completeDialog").showModal();
+}
+
+function completePlan(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const plan = state.plans.find((item) => item.id === data.get("planId"));
+  if (!plan) return;
+  plan.status = "done";
+  plan.outcome = data.get("outcome").trim();
+  saveState();
+  $("#completeDialog").close();
+  render();
+}
+
+function captureInbox(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  state.inbox.unshift({
+    id: uid(),
+    title: data.get("title").trim(),
+    status: "inbox",
+    createdAt: new Date().toISOString(),
+  });
+  saveState();
+  event.currentTarget.reset();
+  renderInbox();
+}
+
+function renderInbox() {
+  const list = $("#inboxList");
+  list.innerHTML = "";
+  const inbox = state.inbox.filter((item) => item.status === "inbox");
+  if (!inbox.length) {
+    list.innerHTML = `<div class="empty-state compact"><strong>收件箱是空的。</strong><span>记下来只是防止遗忘，不代表它值得进入今天。</span></div>`;
+    return;
+  }
+
+  inbox.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "inbox-item";
+    row.innerHTML = `
+      <strong>${escapeHtml(item.title)}</strong>
+      <div class="triage-actions">
+        <button type="button" data-action="portfolio">推进作品</button>
+        <button type="button" data-action="schedule">有时间点</button>
+        <button type="button" data-action="later">以后再说</button>
+        <button type="button" data-action="delete" aria-label="删除">×</button>
+      </div>
+    `;
+    row.querySelectorAll("button").forEach((button) => {
+      button.addEventListener("click", () => triageInbox(item, button.dataset.action));
+    });
+    list.append(row);
+  });
+}
+
+function triageInbox(item, action) {
+  if (action === "delete") {
+    state.inbox = state.inbox.filter((entry) => entry.id !== item.id);
+    saveState();
+    renderInbox();
+    return;
+  }
+  if (action === "later") {
+    item.status = "later";
+    saveState();
+    renderInbox();
+    return;
+  }
+  openPlanForDate(toDateKey(now), {
+    title: item.title,
+    type: action === "portfolio" ? "portfolio" : "life",
+    sourceInboxId: item.id,
+  });
+}
+
+function saveReview(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  state.reviews[toDateKey(now)] = {
+    progress: data.get("progress").trim(),
+    drift: data.get("drift").trim(),
+    tomorrow: data.get("tomorrow").trim(),
+  };
+  saveState();
+  $("#reviewSaved").textContent = "已保存在这台设备上";
+  setTimeout(() => { $("#reviewSaved").textContent = ""; }, 2400);
+}
+
+function renderReview() {
+  const review = state.reviews[toDateKey(now)] || {};
+  const form = $("#reviewForm");
+  form.elements.progress.value = review.progress || "";
+  form.elements.drift.value = review.drift || "";
+  form.elements.tomorrow.value = review.tomorrow || "";
+}
+
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `ciel-backup-${toDateKey(now)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 init();

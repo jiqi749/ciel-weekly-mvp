@@ -3,228 +3,214 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ciel时间记录日志</title>
-    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="%23edff5f"/><text x="32" y="39" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="%2311100f">C</text></svg>' />
-    <link rel="stylesheet" href="styles.css?v=20260708-comments" />
+    <meta name="theme-color" content="#f5f3ea" />
+    <title>Ciel · 一周怎么过</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="%23d9ff57"/><text x="32" y="40" text-anchor="middle" font-size="24" font-family="Arial" font-weight="700" fill="%23151513">C</text></svg>' />
+    <link rel="stylesheet" href="styles.css?v=20260712-mvp" />
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#logs" aria-label="回到时间记录">
+      <a class="brand" href="#today" aria-label="回到今天">
         <span class="brand-mark">C</span>
-        <span class="brand-copy single">
-          <strong>📝Ciel时间记录日志</strong>
+        <span>
+          <strong>Ciel</strong>
+          <small>一周怎么过</small>
         </span>
       </a>
-      <nav class="nav-links" aria-label="页面导航">
-        <a href="#logs">时间</a>
-        <a href="#calendar">日历</a>
-        <a href="#reminders">提醒</a>
-        <a href="#notes">札记</a>
+      <nav aria-label="页面导航">
+        <a href="#today">今天</a>
+        <a href="#week">本周</a>
+        <a href="#inbox">收件箱</a>
       </nav>
-      <time class="today-stamp" id="todayStamp"></time>
+      <button class="quiet-button" id="exportButton" type="button">备份</button>
     </header>
 
     <main>
-      <section class="metrics" aria-label="今日摘要">
-        <article class="metric-card">
-          <span>已记录</span>
-          <strong id="loggedTotal">0h</strong>
-          <small>选中日期合计</small>
-        </article>
-        <article class="metric-card highlight">
-          <span>主线目标1</span>
-          <strong id="protectedTotal">0m</strong>
-          <small>作品集/学习自动合计</small>
-        </article>
-        <article class="metric-card">
-          <span>公司事项</span>
-          <strong id="workTotal">0m</strong>
-          <small>公司类型自动合计</small>
-        </article>
-        <article class="metric-card">
-          <span>其他时间</span>
-          <strong id="otherTotal">0m</strong>
-          <small>关系/运动/生活/休息</small>
-        </article>
+      <section class="hero" id="today">
+        <div>
+          <p class="eyebrow" id="todayLabel"></p>
+          <h1>今天，时间要给谁？</h1>
+          <p class="hero-copy">先看已经答应的事，再保护真正要改变生活的事。</p>
+        </div>
+        <div class="mode-switch" aria-label="本周模式">
+          <span>本周状态</span>
+          <div>
+            <button type="button" data-mode="normal">普通周</button>
+            <button type="button" data-mode="special">特殊周</button>
+          </div>
+          <small id="modeHint"></small>
+        </div>
       </section>
 
-      <section class="workspace-grid">
-        <article class="panel time-panel" id="logs">
+      <section class="today-layout">
+        <article class="panel today-panel">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">TIME LEDGER</p>
-              <h2>时间流水</h2>
+              <p class="eyebrow">TODAY</p>
+              <h2>今天已经安排</h2>
             </div>
-            <button class="button ghost" id="clearTodayButton" type="button">清空当天记录</button>
+            <div class="filters" id="todayFilters" aria-label="筛选今天的安排">
+              <button class="active" type="button" data-filter="all">全部</button>
+              <button type="button" data-filter="work">工作</button>
+              <button type="button" data-filter="personal">日常</button>
+            </div>
           </div>
+          <div class="today-list" id="todayList"></div>
+        </article>
 
-          <form id="logForm" class="entry-form">
+        <aside class="panel compass-panel">
+          <p class="eyebrow">WEEKLY COMPASS</p>
+          <h2>本周不能丢掉</h2>
+          <div class="compass-list">
+            <div>
+              <span class="dot portfolio"></span>
+              <p><strong>作品集</strong><small>3 次产出时段 · 每次 90 分钟</small></p>
+              <b id="portfolioProgress">0 / 3</b>
+            </div>
+            <div>
+              <span class="dot relationship"></span>
+              <p><strong>认真陪伴</strong><small>工作日晚间 · 每天约 1 小时</small></p>
+              <b id="relationshipProgress">0 天</b>
+            </div>
+            <div>
+              <span class="dot climbing"></span>
+              <p><strong>攀岩</strong><small>周日提前商量 · 每周 3 次</small></p>
+              <b id="climbingProgress">0 / 3</b>
+            </div>
+            <div>
+              <span class="dot sleep"></span>
+              <p><strong>睡眠底线</strong><small>不拿睡眠填补计划冲突</small></p>
+              <b>≥ 7.5h</b>
+            </div>
+          </div>
+          <p class="rule-note">作品集被加班挤掉：先移到周末；周末已满，再取消一次工作日攀岩。</p>
+        </aside>
+      </section>
+
+      <section class="panel week-panel" id="week">
+        <div class="section-heading week-heading">
+          <div>
+            <p class="eyebrow">THIS WEEK</p>
+            <h2>先安排承诺，再填 Todo</h2>
+          </div>
+          <div class="week-controls">
+            <button class="icon-button" id="previousWeek" type="button" aria-label="上一周">←</button>
+            <strong id="weekRange"></strong>
+            <button class="icon-button" id="nextWeek" type="button" aria-label="下一周">→</button>
+            <button class="quiet-button" id="currentWeek" type="button">回到本周</button>
+          </div>
+        </div>
+
+        <div class="week-summary" id="weekSummary"></div>
+        <div class="week-grid" id="weekGrid"></div>
+
+        <details class="add-plan" id="addPlanDetails">
+          <summary>＋ 安排一个时间块</summary>
+          <form id="planForm" class="plan-form">
+            <input type="hidden" name="editingId" />
+            <input type="hidden" name="sourceInboxId" />
             <label>
               <span>日期</span>
-              <input id="logDate" name="date" type="date" required />
+              <input name="date" id="planDate" type="date" required />
             </label>
             <label>
               <span>开始</span>
               <input name="start" type="time" required />
             </label>
             <label>
-              <span>结束</span>
-              <input name="end" type="time" required />
-            </label>
-            <label class="wide-field">
-              <span>内容</span>
-              <input name="title" type="text" placeholder="例如：作品集案例结构" required />
-            </label>
-            <label>
-              <span>类型</span>
-              <select name="category">
-                <option value="portfolio">作品集</option>
-                <option value="work">公司</option>
-                <option value="relationship">关系</option>
-                <option value="movement">运动</option>
-                <option value="life">生活</option>
-                <option value="rest">休息</option>
-                <option value="study">学习</option>
+              <span>时长</span>
+              <select name="duration">
+                <option value="60">60 分钟</option>
+                <option value="90" selected>90 分钟</option>
+                <option value="120">2 小时</option>
+                <option value="180">3 小时</option>
               </select>
-            </label>
-            <label>
-              <span>精力</span>
-              <select name="energy">
-                <option value="5">高</option>
-                <option value="3">中</option>
-                <option value="1">低</option>
-              </select>
-            </label>
-            <button class="button primary" id="logSubmitButton" type="submit">记录时间</button>
-            <button class="button ghost is-hidden" id="cancelEditLogButton" type="button">取消修改</button>
-          </form>
-
-          <div class="color-legend" aria-label="颜色说明">
-            <span><i class="swatch portfolio"></i>主线/作品集</span>
-            <span><i class="swatch work"></i>公司</span>
-            <span><i class="swatch relationship"></i>关系</span>
-            <span><i class="swatch movement"></i>运动</span>
-            <span><i class="swatch life"></i>生活</span>
-            <span><i class="swatch rest"></i>休息</span>
-          </div>
-
-          <div class="timeline-wrap">
-            <div class="timeline-track" id="timelineTrack"></div>
-          </div>
-
-          <div class="log-list" id="logList"></div>
-        </article>
-
-        <article class="panel calendar-panel" id="calendar">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">CALENDAR</p>
-              <h2>月历</h2>
-            </div>
-            <div class="month-controls">
-              <button class="icon-button" id="prevMonth" type="button" aria-label="上个月">‹</button>
-              <strong id="monthLabel"></strong>
-              <button class="icon-button" id="nextMonth" type="button" aria-label="下个月">›</button>
-            </div>
-          </div>
-          <div class="weekday-row" aria-hidden="true">
-            <span>一</span>
-            <span>二</span>
-            <span>三</span>
-            <span>四</span>
-            <span>五</span>
-            <span>六</span>
-            <span>日</span>
-          </div>
-          <div class="calendar-grid" id="calendarGrid"></div>
-          <div class="event-list" id="eventList"></div>
-
-          <form id="eventForm" class="entry-form compact-form">
-            <label>
-              <span>日期</span>
-              <input id="eventDate" name="date" type="date" required />
-            </label>
-            <label>
-              <span>时间</span>
-              <input name="time" type="time" />
-            </label>
-            <label class="wide-field">
-              <span>日历</span>
-              <input name="title" type="text" placeholder="例如：作品集保护块" required />
             </label>
             <label>
               <span>性质</span>
-              <select name="type">
-                <option value="protect">保护块</option>
-                <option value="work">公司</option>
-                <option value="life">生活</option>
-                <option value="relationship">关系</option>
-                <option value="movement">运动</option>
+              <select name="type" id="planType">
+                <option value="portfolio">作品集产出</option>
+                <option value="relationship">共同时间</option>
+                <option value="climbing">攀岩</option>
+                <option value="work">工作承诺</option>
+                <option value="life">生活必要</option>
+                <option value="health">健康 / 康复</option>
               </select>
             </label>
-            <button class="button primary" type="submit">写入日历</button>
-          </form>
-        </article>
-
-        <article class="panel reminders-panel" id="reminders">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">REMINDERS</p>
-              <h2>提醒事项</h2>
-            </div>
-          </div>
-
-          <form id="reminderForm" class="entry-form compact-form">
             <label class="wide-field">
-              <span>事项</span>
-              <input name="title" type="text" placeholder="例如：睡前整理明天第一步" required />
+              <span>这段时间具体做什么</span>
+              <input name="title" id="planTitle" type="text" placeholder="例如：完成作品集项目的筛选交互" required />
             </label>
-            <label>
-              <span>日期</span>
-              <input id="reminderDate" name="date" type="date" required />
+            <label class="check-field" id="confirmedField">
+              <input name="confirmed" type="checkbox" />
+              <span>涉及共同时间，已经和老婆确认</span>
             </label>
-            <label>
-              <span>时间</span>
-              <input name="time" type="time" />
-            </label>
-            <button class="button primary" type="submit">添加提醒</button>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">保存安排</button>
+              <button class="quiet-button is-hidden" id="cancelPlanEdit" type="button">取消修改</button>
+            </div>
           </form>
+        </details>
+      </section>
 
-          <div class="reminder-list" id="reminderList"></div>
-        </article>
-
-        <article class="panel notes-panel" id="notes">
+      <section class="bottom-grid">
+        <article class="panel inbox-panel" id="inbox">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">DAY NOTE</p>
-              <h2>日历札记</h2>
+              <p class="eyebrow">INBOX</p>
+              <h2>先记下来，不等于今天要做</h2>
             </div>
-            <time id="selectedDateLabel"></time>
           </div>
-          <textarea id="dayNote" placeholder="今天的实际消耗、打断、取舍、明天要保护的时间。"></textarea>
-          <button class="button primary" id="saveNoteButton" type="button">保存札记</button>
+          <form class="quick-capture" id="inboxForm">
+            <input name="title" type="text" placeholder="脑子里刚冒出来的事情……" required />
+            <button class="primary-button" type="submit">记下来</button>
+          </form>
+          <div class="inbox-list" id="inboxList"></div>
+        </article>
 
-          <details class="focus-details">
-            <summary>精力版本</summary>
-            <div class="focus-stack">
-              <div>
-                <span>高精力版</span>
-                <strong id="highEnergyAction"></strong>
-              </div>
-              <div>
-                <span>中精力版</span>
-                <strong id="midEnergyAction"></strong>
-              </div>
-              <div>
-                <span>低精力版</span>
-                <strong id="lowEnergyAction"></strong>
-              </div>
+        <article class="panel review-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">DAILY REVIEW</p>
+              <h2>晚上看一眼</h2>
             </div>
-          </details>
+          </div>
+          <form id="reviewForm" class="review-form">
+            <label>
+              <span>今天真正推进了什么？</span>
+              <textarea name="progress" rows="3" placeholder="留下了什么代码、文档或明确结果？"></textarea>
+            </label>
+            <label>
+              <span>今天有什么走偏？</span>
+              <textarea name="drift" rows="3" placeholder="哪些合理的小事扩张了？"></textarea>
+            </label>
+            <label>
+              <span>明天第一段需要保护什么？</span>
+              <input name="tomorrow" type="text" placeholder="写一个可以直接开始的动作" />
+            </label>
+            <button class="primary-button" type="submit">保存今天</button>
+            <small id="reviewSaved" aria-live="polite"></small>
+          </form>
         </article>
       </section>
     </main>
 
-    <script src="app.js?v=20260708-comments"></script>
+    <dialog id="completeDialog">
+      <form method="dialog" id="completeForm">
+        <input type="hidden" name="planId" />
+        <p class="eyebrow">留下证据</p>
+        <h2 id="completeTitle">完成这段时间</h2>
+        <label>
+          <span id="outcomeLabel">实际留下了什么？</span>
+          <textarea name="outcome" rows="4" placeholder="例如：提交筛选组件；修复移动端布局；写完项目背景。"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="quiet-button" value="cancel" type="button" id="closeCompleteDialog">取消</button>
+          <button class="primary-button" value="default" type="submit">标记完成</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js?v=20260712-mvp"></script>
   </body>
 </html>
