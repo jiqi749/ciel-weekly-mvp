@@ -44,6 +44,7 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.CielSync?.notifyLocalChange();
 }
 
 function uid() {
@@ -508,5 +509,29 @@ function exportBackup() {
   link.click();
   URL.revokeObjectURL(url);
 }
+
+function replaceStateFromSync(nextState) {
+  state = {
+    ...structuredClone(defaultState),
+    ...(nextState || {}),
+    plans: Array.isArray(nextState?.plans) ? nextState.plans : [],
+    inbox: Array.isArray(nextState?.inbox) ? nextState.inbox : [],
+    reviews: nextState?.reviews || {},
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+}
+
+window.CielApp = {
+  getState: () => structuredClone(state),
+  replaceStateFromSync,
+  isStateEmpty: (candidate = state) => (
+    !(candidate?.plans?.length) &&
+    !(candidate?.inbox?.length) &&
+    !Object.values(candidate?.reviews || {}).some((review) => (
+      review?.progress || review?.drift || review?.tomorrow
+    ))
+  ),
+};
 
 init();

@@ -22,7 +22,13 @@
         <a href="#week">本周</a>
         <a href="#inbox">收件箱</a>
       </nav>
-      <button class="quiet-button" id="exportButton" type="button">备份</button>
+      <div class="topbar-actions">
+        <button class="sync-button is-local" id="syncButton" type="button">
+          <span class="sync-dot" aria-hidden="true"></span>
+          <span id="syncButtonLabel">仅本机</span>
+        </button>
+        <button class="quiet-button" id="exportButton" type="button">备份</button>
+      </div>
     </header>
 
     <main>
@@ -211,6 +217,64 @@
       </form>
     </dialog>
 
+    <dialog id="syncDialog" class="sync-dialog">
+      <div class="sync-dialog-body">
+        <button class="dialog-close" id="closeSyncDialog" type="button" aria-label="关闭">×</button>
+        <p class="eyebrow">DEVICE SYNC</p>
+        <h2>跨设备同步</h2>
+        <p class="sync-intro">本机仍会立即保存；登录后，再把手机和电脑同步到同一份云端数据。</p>
+
+        <div id="syncSignedOut">
+          <form id="syncLoginForm" class="sync-login-form">
+            <label>
+              <span>你的邮箱</span>
+              <input name="email" type="email" autocomplete="email" placeholder="name@example.com" required />
+            </label>
+            <button class="primary-button" type="submit">发送登录链接</button>
+          </form>
+          <p class="form-message" id="syncLoginMessage" aria-live="polite"></p>
+          <small>手机和电脑使用同一个邮箱。无需设置新密码。</small>
+        </div>
+
+        <div class="is-hidden" id="syncSignedIn">
+          <div class="sync-account">
+            <span>当前账号</span>
+            <strong id="syncEmail"></strong>
+          </div>
+          <div class="sync-detail-grid">
+            <div><span>状态</span><strong id="syncDetailStatus">已同步</strong></div>
+            <div><span>最近同步</span><strong id="syncLastTime">—</strong></div>
+          </div>
+          <p class="form-message" id="syncAccountMessage" aria-live="polite"></p>
+          <div class="dialog-actions spread">
+            <button class="quiet-button" id="signOutButton" type="button">退出登录</button>
+            <button class="primary-button" id="syncNowButton" type="button">立即同步</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="syncConflictDialog" class="sync-dialog">
+      <div class="sync-dialog-body">
+        <p class="eyebrow">SYNC CONFLICT</p>
+        <h2>两台设备都有新内容</h2>
+        <p class="sync-intro">为了避免静默覆盖，请选择这次保留哪一份。另一份不会自动合并。</p>
+        <div class="conflict-options">
+          <button class="conflict-choice" id="keepCloudButton" type="button">
+            <strong>使用云端数据</strong>
+            <span id="cloudConflictSummary">来自另一台设备</span>
+          </button>
+          <button class="conflict-choice" id="keepLocalButton" type="button">
+            <strong>保留这台设备</strong>
+            <span id="localConflictSummary">上传当前本机数据</span>
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="sync-config.js?v=20260713-sync"></script>
     <script src="app.js?v=20260712-mvp"></script>
+    <script src="sync.js?v=20260713-sync"></script>
   </body>
 </html>
