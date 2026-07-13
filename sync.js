@@ -10,6 +10,7 @@
   let pushTimer = null;
   let applyingRemote = false;
   let conflictResolver = null;
+  let syncQueue = Promise.resolve();
 
   const meta = loadMeta();
 
@@ -118,7 +119,12 @@
     markSynced(data);
   }
 
-  async function pushLocal() {
+  function enqueueSync(operation) {
+    syncQueue = syncQueue.catch(() => {}).then(operation);
+    return syncQueue;
+  }
+
+  async function performPushLocal() {
     if (!client || !user || applyingRemote) return;
     clearTimeout(pushTimer);
     setStatus("syncing", "正在上传");
@@ -157,6 +163,10 @@
     }
   }
 
+  function pushLocal() {
+    return enqueueSync(performPushLocal);
+  }
+
   async function applyCloud(remote) {
     applyingRemote = true;
     app.replaceStateFromSync(remote.payload || {});
@@ -177,7 +187,7 @@
     }
   }
 
-  async function syncNow() {
+  async function performSyncNow() {
     if (!client || !user) return;
     clearTimeout(pushTimer);
     setStatus("syncing", "正在检查云端");
@@ -215,7 +225,7 @@
       } else if (remoteChanged) {
         await applyCloud(remote);
       } else if (localChanged) {
-        await pushLocal();
+        await performPushLocal();
       } else {
         await resolveRemoteConflict(remote);
       }
@@ -224,6 +234,10 @@
       setStatus("error", "同步失败，本机数据仍已保存");
       showAccountMessage("暂时无法连接云端，请稍后重试。", true);
     }
+  }
+
+  function syncNow() {
+    return enqueueSync(performSyncNow);
   }
 
   function askConflict(remote) {
