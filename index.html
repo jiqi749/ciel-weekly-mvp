@@ -230,10 +230,17 @@
               <span>你的邮箱</span>
               <input name="email" type="email" autocomplete="email" placeholder="name@example.com" required />
             </label>
-            <button class="primary-button" type="submit">发送登录链接</button>
+            <label>
+              <span>同步密码</span>
+              <input name="password" type="password" autocomplete="current-password" minlength="8" placeholder="至少 8 位" required />
+            </label>
+            <div class="sync-auth-actions">
+              <button class="primary-button" type="submit">登录</button>
+              <button class="quiet-button" id="syncSignUpButton" type="button">首次使用，创建账号</button>
+            </div>
           </form>
           <p class="form-message" id="syncLoginMessage" aria-live="polite"></p>
-          <small>手机和电脑使用同一个邮箱。无需设置新密码。</small>
+          <small>手机和电脑使用同一个邮箱和密码。密码只交给 Supabase 验证，不会写入本机数据或代码。</small>
         </div>
 
         <div class="is-hidden" id="syncSignedIn">

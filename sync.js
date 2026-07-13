@@ -277,17 +277,44 @@
     node.style.color = isError ? "#a33d38" : "";
   }
 
-  async function sendMagicLink(event) {
+  function readCredentials(form) {
+    const data = new FormData(form);
+    return {
+      email: String(data.get("email") || "").trim(),
+      password: String(data.get("password") || ""),
+    };
+  }
+
+  function authErrorMessage(error) {
+    const value = String(error?.message || "").toLowerCase();
+    if (value.includes("invalid login credentials")) return "邮箱或密码不正确。若是首次使用，请先创建账号。";
+    if (value.includes("user already registered")) return "这个邮箱已经注册，请直接登录。";
+    if (value.includes("password should be")) return "密码至少需要 8 位。";
+    if (value.includes("rate limit")) return "尝试次数过多，请稍后再试。";
+    return error?.message ? `操作失败：${error.message}` : "操作失败，请稍后再试。";
+  }
+
+  async function signInWithPassword(event) {
     event.preventDefault();
     const message = document.querySelector("#syncLoginMessage");
-    const email = new FormData(event.currentTarget).get("email").trim();
-    message.textContent = "正在发送……";
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-    message.textContent = error ? `发送失败：${error.message}` : "登录链接已发送，请打开邮箱完成登录。";
+    const { email, password } = readCredentials(event.currentTarget);
+    message.textContent = "正在登录……";
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    message.textContent = error ? authErrorMessage(error) : "登录成功，正在同步……";
+  }
+
+  async function signUp() {
+    const form = document.querySelector("#syncLoginForm");
+    const message = document.querySelector("#syncLoginMessage");
+    if (!form.reportValidity()) return;
+    const { email, password } = readCredentials(form);
+    message.textContent = "正在创建账号……";
+    const { data, error } = await client.auth.signUp({ email, password });
+    if (error) {
+      message.textContent = authErrorMessage(error);
+      return;
+    }
+    message.textContent = data.session ? "账号已创建，正在同步……" : "账号已创建，请登录。";
   }
 
   async function signOut() {
@@ -299,7 +326,8 @@
   function bindUI() {
     document.querySelector("#syncButton")?.addEventListener("click", () => document.querySelector("#syncDialog")?.showModal());
     document.querySelector("#closeSyncDialog")?.addEventListener("click", () => document.querySelector("#syncDialog")?.close());
-    document.querySelector("#syncLoginForm")?.addEventListener("submit", sendMagicLink);
+    document.querySelector("#syncLoginForm")?.addEventListener("submit", signInWithPassword);
+    document.querySelector("#syncSignUpButton")?.addEventListener("click", signUp);
     document.querySelector("#syncNowButton")?.addEventListener("click", syncNow);
     document.querySelector("#signOutButton")?.addEventListener("click", signOut);
     document.querySelector("#keepCloudButton")?.addEventListener("click", () => resolveConflict("cloud"));
