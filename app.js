@@ -19,8 +19,8 @@ const decisionMeta = {
 const statusMeta = {
   planned: "已安排",
   active: "进行中",
-  verified: "有效完成",
-  unqualified: "做了但不算",
+  verified: "完成并计入",
+  unqualified: "完成但不计入",
   interrupted: "被打断",
 };
 
@@ -179,10 +179,9 @@ function bindEvents() {
     renderWeek();
   });
 
-  $("#addTodayPlan").addEventListener("click", () => openPlanForDate(todayKey));
   $("#planType").addEventListener("change", renderConditionalPlanFields);
   $("#planForm").addEventListener("submit", savePlanFromForm);
-  $("#cancelPlanEdit").addEventListener("click", resetPlanForm);
+  $("#cancelPlanEdit").addEventListener("click", closePlanDialog);
   $("#inboxForm").addEventListener("submit", captureInbox);
   $("#reviewForm").addEventListener("submit", saveReview);
   $("#noteForm").addEventListener("submit", saveNote);
@@ -290,6 +289,109 @@ function renderTimeline() {
   timeline.querySelectorAll("[data-plan-action]").forEach((button) => {
     button.addEventListener("click", () => handlePlanAction(button.dataset.planAction, button.dataset.planId));
   });
+  bindTimelineCreation(timeline.querySelector(".timeline-lane"));
+}
+
+function minutesToTime(minutes) {
+  const bounded = Math.max(0, Math.min(23 * 60 + 59, minutes));
+  return `${String(Math.floor(bounded / 60)).padStart(2, "0")}:${String(bounded % 60).padStart(2, "0")}`;
+}
+
+function bindTimelineCreation(lane) {
+  if (!lane) return;
+  const dayStart = 7 * 60;
+  const dayEnd = 24 * 60;
+  const snap = 15;
+  let holdTimer = null;
+  let activePointer = null;
+  let anchorMinute = null;
+  let currentMinute = null;
+  let anchorY = null;
+  let draft = null;
+  let dragging = false;
+
+  const minuteFromEvent = (event) => {
+    const rect = lane.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const raw = dayStart + ratio * (dayEnd - dayStart);
+    return Math.max(dayStart, Math.min(dayEnd, Math.round(raw / snap) * snap));
+  };
+
+  const updateDraft = () => {
+    if (!draft) return;
+    const start = Math.min(anchorMinute, currentMinute);
+    const end = Math.max(anchorMinute, currentMinute);
+    const top = ((start - dayStart) / (dayEnd - dayStart)) * 100;
+    const duration = Math.max(30, end - start);
+    const height = (duration / (dayEnd - dayStart)) * 100;
+    draft.style.top = `${top}%`;
+    draft.style.height = `${height}%`;
+    draft.textContent = `${minutesToTime(start)} · ${duration} 分钟`;
+  };
+
+  const beginDrag = (event) => {
+    dragging = true;
+    activePointer = event.pointerId;
+    anchorMinute = Math.min(dayEnd - 30, minuteFromEvent(event));
+    currentMinute = anchorMinute;
+    draft = document.createElement("div");
+    draft.className = "timeline-draft";
+    lane.append(draft);
+    try { lane.setPointerCapture(event.pointerId); } catch { /* pointer may already belong to scrolling */ }
+    updateDraft();
+  };
+
+  const clearGesture = () => {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    activePointer = null;
+    anchorMinute = null;
+    currentMinute = null;
+    anchorY = null;
+    dragging = false;
+    draft?.remove();
+    draft = null;
+  };
+
+  lane.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".timeline-block")) return;
+    anchorY = event.clientY;
+    if (event.pointerType === "mouse" || event.pointerType === "pen") {
+      beginDrag(event);
+    } else {
+      holdTimer = setTimeout(() => beginDrag(event), 360);
+    }
+  });
+
+  lane.addEventListener("pointermove", (event) => {
+    if (!dragging) {
+      if (anchorY !== null && Math.abs(event.clientY - anchorY) > 8) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      return;
+    }
+    if (event.pointerId !== activePointer) return;
+    event.preventDefault();
+    currentMinute = minuteFromEvent(event);
+    updateDraft();
+  });
+
+  lane.addEventListener("pointerup", (event) => {
+    clearTimeout(holdTimer);
+    if (!dragging || event.pointerId !== activePointer) {
+      clearGesture();
+      return;
+    }
+    currentMinute = minuteFromEvent(event);
+    const start = Math.min(anchorMinute, currentMinute);
+    const end = Math.max(anchorMinute, currentMinute);
+    const duration = Math.max(30, Math.round((end - start) / snap) * snap);
+    clearGesture();
+    openPlanForDate(todayKey, { start: minutesToTime(start), duration });
+  });
+
+  lane.addEventListener("pointercancel", clearGesture);
 }
 
 function timelineActions(plan) {
@@ -336,7 +438,6 @@ function renderWeek() {
   renderProgress();
   renderWeekSummary();
   renderWeekGrid();
-  renderWeekCandidates();
 }
 
 function renderProgress() {
@@ -358,7 +459,7 @@ function renderProgress() {
       <div class="progress-row ${type}">
         <div class="progress-label"><strong>${meta.shortLabel}</strong><small>目标 ${meta.target} 次${modeSuffix}</small></div>
         <div class="progress-segments">${segments}</div>
-        <span class="progress-count">已安排 ${matching.length} · ${formatDuration(scheduledMinutes)}｜有效 ${verified}</span>
+        <span class="progress-count">已安排 ${matching.length} · ${formatDuration(scheduledMinutes)}｜计入 ${verified}</span>
       </div>
     `;
   }).join("");
@@ -370,11 +471,13 @@ function renderWeekSummary() {
   const interrupted = plans.filter((plan) => plan.status === "interrupted").length;
   const unqualified = plans.filter((plan) => plan.status === "unqualified").length;
   const portfolio = plans.filter((plan) => plan.type === "portfolio").length;
+  const pendingWeekItems = state.inbox.filter((item) => item.status !== "scheduled" && item.decision === "week").length;
   const messages = [];
   if (portfolio < 3 && state.mode === "normal") messages.push(`作品集还差 ${3 - portfolio} 段安排`);
-  if (verified) messages.push(`${verified} 段投入通过结束审查`);
+  if (verified) messages.push(`${verified} 段投入完成并计入进度`);
   if (interrupted) messages.push(`${interrupted} 段被打断，等待重新安排`);
   if (unqualified) messages.push(`${unqualified} 段做过但没有计入进度`);
+  if (pendingWeekItems) messages.push(`收件箱还有 ${pendingWeekItems} 件“本周必须做”尚未安排`);
   if (!messages.length) messages.push("本周还没有真实结果；先为关键投入找到位置。");
   $("#weekSummary").innerHTML = messages.map((message) => `<span>${escapeHtml(message)}</span>`).join("");
 }
@@ -400,7 +503,7 @@ function renderWeekGrid() {
         ${plans.length ? plans.map(renderWeekPlan).join("") : '<span class="day-empty">留白</span>'}
       </div>
       <div class="day-file-actions">
-        <span>${date < fromDateKey(todayKey) ? `有效 ${verifiedCount}${issueCount ? ` · 待处理 ${issueCount}` : ""}` : `${plans.length} 个安排`}</span>
+        <span>${date < fromDateKey(todayKey) ? `计入 ${verifiedCount}${issueCount ? ` · 待处理 ${issueCount}` : ""}` : `${plans.length} 个安排`}</span>
         <button type="button" data-add-date="${key}">＋ 添加</button>
       </div>
     `;
@@ -417,13 +520,6 @@ function renderWeekGrid() {
 
 function renderWeekPlan(plan) {
   return `<button type="button" class="week-plan ${escapeHtml(plan.type)} is-${escapeHtml(plan.status)}" data-edit-plan="${plan.id}"><strong>${escapeHtml(plan.start)}</strong> ${escapeHtml(plan.title)}</button>`;
-}
-
-function renderWeekCandidates() {
-  const candidates = state.inbox.filter((item) => item.status !== "scheduled" && item.decision === "week");
-  $("#weekCandidates").innerHTML = candidates.length
-    ? `<div class="candidate-list">${candidates.map((item) => `<div class="candidate-item">${escapeHtml(item.title)}<span>${escapeHtml(typeMeta[item.category]?.label || "生活必要")}</span></div>`).join("")}</div>`
-    : '<p class="empty-copy">没有尚未安排的本周候选。</p>';
 }
 
 function renderConditionalPlanFields() {
@@ -465,6 +561,7 @@ function savePlanFromForm(event) {
 
   viewedWeekStart = startOfWeek(fromDateKey(payload.date));
   saveState();
+  $("#planDialog").close();
   resetPlanForm();
   render();
 }
@@ -474,10 +571,12 @@ function openPlanForDate(dateKey, defaults = {}) {
   $("#planDate").value = dateKey;
   if (defaults.type && typeMeta[defaults.type]) $("#planType").value = defaults.type;
   if (defaults.title) $("#planTitle").value = defaults.title;
+  if (defaults.start) $("#planForm").elements.start.value = defaults.start;
+  if (defaults.duration) setPlanDuration(defaults.duration);
   if (defaults.sourceInboxId) $("#planForm").elements.sourceInboxId.value = defaults.sourceInboxId;
   renderConditionalPlanFields();
-  $("#addPlanDetails").open = true;
-  $("#addPlanDetails").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#planDialogTitle").textContent = "安排时间";
+  $("#planDialog").showModal();
   setTimeout(() => $("#planForm").elements.start.focus(), 350);
 }
 
@@ -486,26 +585,42 @@ function editPlan(plan) {
   form.elements.editingId.value = plan.id;
   form.elements.date.value = plan.date;
   form.elements.start.value = plan.start;
-  form.elements.duration.value = String(plan.duration);
+  setPlanDuration(plan.duration);
   form.elements.type.value = plan.type;
   form.elements.title.value = plan.title;
   form.elements.intention.value = plan.intention || "";
   form.elements.confirmed.checked = Boolean(plan.confirmed);
-  $("#cancelPlanEdit").classList.remove("is-hidden");
-  $("#addPlanDetails").open = true;
+  $("#planDialogTitle").textContent = "调整时间块";
   renderConditionalPlanFields();
-  $("#addPlanDetails").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#planDialog").showModal();
 }
 
 function resetPlanForm() {
   const form = $("#planForm");
   form.reset();
+  form.elements.duration.querySelector("[data-custom-duration]")?.remove();
   form.elements.editingId.value = "";
   form.elements.sourceInboxId.value = "";
   form.elements.date.value = todayKey;
   form.elements.duration.value = "90";
-  $("#cancelPlanEdit").classList.add("is-hidden");
   renderConditionalPlanFields();
+}
+
+function setPlanDuration(duration) {
+  const select = $("#planForm").elements.duration;
+  const value = String(Number(duration));
+  select.querySelector("[data-custom-duration]")?.remove();
+  if (![...select.options].some((option) => option.value === value)) {
+    const option = new Option(`${value} 分钟`, value, true, true);
+    option.dataset.customDuration = "true";
+    select.add(option);
+  }
+  select.value = value;
+}
+
+function closePlanDialog() {
+  $("#planDialog").close();
+  resetPlanForm();
 }
 
 function movePlan(plan) {
@@ -543,10 +658,10 @@ function openCompleteDialog(plan) {
 function updateCompleteRequirement() {
   const form = $("#completeForm");
   const plan = state.plans.find((item) => item.id === form.elements.planId.value);
-  const verifiedPortfolio = plan?.type === "portfolio" && form.elements.result.value === "verified";
-  form.elements.outcome.required = verifiedPortfolio;
-  $("#outcomeLabel").textContent = verifiedPortfolio
-    ? "实际留下了什么？作品集有效完成必须有证据"
+  const countedPortfolio = plan?.type === "portfolio" && form.elements.result.value === "verified";
+  form.elements.outcome.required = countedPortfolio;
+  $("#outcomeLabel").textContent = countedPortfolio
+    ? "实际留下了什么？作品集计入进度必须有证据"
     : "实际发生了什么？（可选）";
 }
 
@@ -591,13 +706,13 @@ function captureInbox(event) {
   form.reset();
   renderInbox();
   renderTodayInboxPreview();
-  renderWeekCandidates();
+  renderWeekSummary();
 
   if (decision === "today") {
     message.textContent = "已经归入今天；接下来为它安排具体时间。";
     openPlanForDate(todayKey, { title, type: category, sourceInboxId: item.id });
   } else {
-    message.textContent = decision === "week" ? "已经归入本周候选。" : "已经放入以后再说。";
+    message.textContent = decision === "week" ? "已经标记为本周必须做；安排后才会进入日历。" : "已经放入以后再说。";
   }
   setTimeout(() => { message.textContent = ""; }, 3200);
 }
@@ -657,7 +772,7 @@ function deleteInboxItem(id) {
   saveState();
   renderInbox();
   renderTodayInboxPreview();
-  renderWeekCandidates();
+  renderWeekSummary();
 }
 
 function changeInboxDecision(id, decision) {
@@ -667,7 +782,7 @@ function changeInboxDecision(id, decision) {
   saveState();
   renderInbox();
   renderTodayInboxPreview();
-  renderWeekCandidates();
+  renderWeekSummary();
 }
 
 function renderTodayInboxPreview() {

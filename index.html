@@ -60,15 +60,14 @@
             <div>
               <p class="eyebrow">OPEN FILE / TODAY</p>
               <h2>今天</h2>
-              <p>完整时间线 · 已经过去的时间不会被重新包装</p>
+              <p>在空白处拖动创建时间块；手机上长按后拖动。</p>
             </div>
-            <button class="archive-button" id="addTodayPlan" type="button">＋ 安排时间</button>
           </div>
           <div class="status-legend" aria-label="时间块状态说明">
             <span class="status-key planned">已安排</span>
             <span class="status-key active">进行中</span>
-            <span class="status-key verified">有效完成</span>
-            <span class="status-key unqualified">做了但不算</span>
+            <span class="status-key verified">完成并计入</span>
+            <span class="status-key unqualified">完成但不计入</span>
             <span class="status-key interrupted">被打断</span>
           </div>
           <div class="timeline" id="todayTimeline"></div>
@@ -105,7 +104,7 @@
           <div>
             <p class="eyebrow">THIS WEEK</p>
             <h2>本周计划与真实进度</h2>
-            <p>彩色纸块代表已经安排；红色验收章只属于有效完成。</p>
+            <p>彩色纸块代表已经安排；红色勾线代表已经完成并计入进度。</p>
           </div>
           <div class="week-controls">
             <button class="square-button" id="previousWeek" type="button" aria-label="上一周">←</button>
@@ -118,10 +117,10 @@
         <div class="progress-dossier">
           <div class="progress-heading">
             <div>
-              <p class="eyebrow">QUALIFIED PROGRESS</p>
+              <p class="eyebrow">COUNTED PROGRESS</p>
               <h3>本周进度</h3>
             </div>
-            <p>安排不是完成。只有通过结束审查，才会盖章。</p>
+            <p>安排不是完成。结束时选择“完成并计入进度”，才会进入完成数字。</p>
           </div>
           <div class="progress-tracks" id="progressTracks"></div>
         </div>
@@ -129,72 +128,6 @@
         <div class="week-summary" id="weekSummary"></div>
         <div class="week-grid" id="weekGrid"></div>
 
-        <div class="week-bottom-grid">
-          <article class="candidate-paper">
-            <div class="candidate-heading">
-              <div>
-                <p class="eyebrow">NOT COMMITTED YET</p>
-                <h3>本周候选</h3>
-              </div>
-              <a href="#inbox">去判断 →</a>
-            </div>
-            <div id="weekCandidates"></div>
-          </article>
-
-          <details class="add-plan" id="addPlanDetails">
-            <summary>＋ 安排一个时间块</summary>
-            <form id="planForm" class="plan-form">
-              <input type="hidden" name="editingId" />
-              <input type="hidden" name="sourceInboxId" />
-              <label>
-                <span>日期</span>
-                <input name="date" id="planDate" type="date" required />
-              </label>
-              <label>
-                <span>开始</span>
-                <input name="start" type="time" required />
-              </label>
-              <label>
-                <span>时长</span>
-                <select name="duration">
-                  <option value="30">30 分钟</option>
-                  <option value="60">60 分钟</option>
-                  <option value="90" selected>90 分钟</option>
-                  <option value="120">2 小时</option>
-                  <option value="180">3 小时</option>
-                </select>
-              </label>
-              <label>
-                <span>性质</span>
-                <select name="type" id="planType">
-                  <option value="portfolio">主线 / 作品集</option>
-                  <option value="relationship">关系 / 共同时间</option>
-                  <option value="climbing">攀岩</option>
-                  <option value="work">工作承诺</option>
-                  <option value="life">生活必要</option>
-                  <option value="health">健康 / 康复</option>
-                  <option value="leisure">自由活动</option>
-                </select>
-              </label>
-              <label class="wide-field">
-                <span>这段时间具体做什么</span>
-                <input name="title" id="planTitle" type="text" placeholder="例如：完成作品集项目的筛选交互" required />
-              </label>
-              <label class="wide-field" id="intentionField">
-                <span>结束时要留下什么？</span>
-                <input name="intention" type="text" placeholder="例如：一个可运行的筛选组件和一次代码提交" />
-              </label>
-              <label class="check-field" id="confirmedField">
-                <input name="confirmed" type="checkbox" />
-                <span>涉及共同时间或攀岩，已经和老婆确认</span>
-              </label>
-              <div class="form-actions wide-field">
-                <button class="primary-button" type="submit">保存安排</button>
-                <button class="quiet-button is-hidden" id="cancelPlanEdit" type="button">取消修改</button>
-              </div>
-            </form>
-          </details>
-        </div>
       </section>
 
       <section class="inbox-desk" id="inbox">
@@ -286,6 +219,61 @@
       <button type="button" disabled title="后续开放"><span>04</span>输出</button>
     </nav>
 
+    <dialog id="planDialog" class="archive-dialog plan-dialog">
+      <form id="planForm" class="plan-form">
+        <input type="hidden" name="editingId" />
+        <input type="hidden" name="sourceInboxId" />
+        <p class="eyebrow wide-field">TIME BLOCK</p>
+        <h2 class="wide-field" id="planDialogTitle">安排时间</h2>
+        <label>
+          <span>日期</span>
+          <input name="date" id="planDate" type="date" required />
+        </label>
+        <label>
+          <span>开始</span>
+          <input name="start" type="time" required />
+        </label>
+        <label>
+          <span>时长</span>
+          <select name="duration">
+            <option value="30">30 分钟</option>
+            <option value="60">60 分钟</option>
+            <option value="90" selected>90 分钟</option>
+            <option value="120">2 小时</option>
+            <option value="180">3 小时</option>
+          </select>
+        </label>
+        <label>
+          <span>性质</span>
+          <select name="type" id="planType">
+            <option value="portfolio">主线 / 作品集</option>
+            <option value="relationship">关系 / 共同时间</option>
+            <option value="climbing">攀岩</option>
+            <option value="work">工作承诺</option>
+            <option value="life">生活必要</option>
+            <option value="health">健康 / 康复</option>
+            <option value="leisure">自由活动</option>
+          </select>
+        </label>
+        <label class="wide-field">
+          <span>这段时间具体做什么</span>
+          <input name="title" id="planTitle" type="text" placeholder="例如：完成作品集项目的筛选交互" required />
+        </label>
+        <label class="wide-field" id="intentionField">
+          <span>结束时要留下什么？</span>
+          <input name="intention" type="text" placeholder="例如：一个可运行的筛选组件和一次代码提交" />
+        </label>
+        <label class="check-field" id="confirmedField">
+          <input name="confirmed" type="checkbox" />
+          <span>涉及共同时间或攀岩，已经和老婆确认</span>
+        </label>
+        <div class="form-actions wide-field">
+          <button class="quiet-button" id="cancelPlanEdit" type="button">取消</button>
+          <button class="primary-button" type="submit">保存安排</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="completeDialog" class="archive-dialog">
       <form method="dialog" id="completeForm">
         <input type="hidden" name="planId" />
@@ -294,8 +282,8 @@
         <label>
           <span>这次结果属于哪一种状态？</span>
           <select name="result" required>
-            <option value="verified">有效完成</option>
-            <option value="unqualified">做了，但不符合标准</option>
+            <option value="verified">完成并计入进度</option>
+            <option value="unqualified">完成，但不计入进度</option>
             <option value="interrupted">被打断，需要重新安排</option>
           </select>
         </label>
