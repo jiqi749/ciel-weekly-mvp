@@ -1,5 +1,6 @@
 (function initializeCielSync() {
   const META_KEY = "ciel-sync-meta-v1";
+  const REQUEST_TIMEOUT_MS = 12000;
   const config = window.CIEL_SYNC_CONFIG || {};
   const app = window.CielApp;
   const supabaseGlobal = window.supabase;
@@ -36,12 +37,13 @@
     const label = document.querySelector("#syncButtonLabel");
     const detailStatus = document.querySelector("#syncDetailStatus");
     if (!button || !label) return;
-    button.classList.remove("is-local", "is-synced", "is-syncing", "is-error");
+    button.classList.remove("is-local", "is-synced", "is-syncing", "is-offline", "is-error");
     button.classList.add(`is-${status}`);
     const labels = {
       local: "仅本机",
       synced: "已同步",
       syncing: "同步中",
+      offline: "暂时离线",
       error: "同步失败",
     };
     label.textContent = labels[status] || labels.local;
@@ -66,6 +68,31 @@
 
   function isConfigured() {
     return Boolean(config.supabaseUrl && config.supabaseAnonKey && supabaseGlobal?.createClient);
+  }
+
+  async function fetchWithTimeout(input, init = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const sourceSignal = init.signal;
+    if (sourceSignal) {
+      if (sourceSignal.aborted) controller.abort();
+      else sourceSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    try {
+      return await window.fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function showConnectionIssue(action) {
+    if (meta.lastSyncedAt) {
+      setStatus("offline", `${action}连接失败；上次同步数据仍可使用`);
+      showAccountMessage("网络暂时不可用。本机数据没有丢失，恢复连接后会继续同步。", true);
+    } else {
+      setStatus("error", `${action}失败，本机数据仍已保存`);
+      showAccountMessage("暂时无法连接云端，本机数据没有丢失。", true);
+    }
   }
 
   function isPayloadEmpty(payload) {
@@ -171,8 +198,7 @@
       markSynced(data);
     } catch (error) {
       console.error("Ciel sync upload failed", error);
-      setStatus("error", "上传失败，本机数据仍已保存");
-      showAccountMessage("暂时无法连接云端，本机数据没有丢失。", true);
+      showConnectionIssue("上传");
     }
   }
 
@@ -244,8 +270,7 @@
       }
     } catch (error) {
       console.error("Ciel sync failed", error);
-      setStatus("error", "同步失败，本机数据仍已保存");
-      showAccountMessage("暂时无法连接云端，请稍后重试。", true);
+      showConnectionIssue("同步");
     }
   }
 
@@ -314,6 +339,8 @@
 
   function authErrorMessage(error) {
     const value = String(error?.message || "").toLowerCase();
+    if (error?.name === "AbortError" || value.includes("aborted")) return "连接超过 12 秒，请切换网络或稍后重试。";
+    if (value.includes("failed to fetch") || value.includes("network")) return "无法连接同步服务，请切换网络或稍后重试。";
     if (value.includes("invalid login credentials")) return "邮箱或密码不正确。若是首次使用，请先创建账号。";
     if (value.includes("user already registered")) return "这个邮箱已经注册，请直接登录。";
     if (value.includes("password should be")) return "密码至少需要 8 位。";
@@ -371,6 +398,7 @@
     }
     client = supabaseGlobal.createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: { persistSession: true, detectSessionInUrl: true, autoRefreshToken: true },
+      global: { fetch: fetchWithTimeout },
     });
     const { data } = await client.auth.getSession();
     renderAuth(data.session);

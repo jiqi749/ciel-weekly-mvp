@@ -94,6 +94,7 @@ a { color: inherit; text-decoration: none; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #8a8b83; }
 .sync-button.is-synced .sync-dot { background: #46a35f; box-shadow: 0 0 0 3px rgba(70,163,95,.14); }
 .sync-button.is-syncing .sync-dot { background: #e0a130; animation: syncPulse 1s infinite alternate; }
+.sync-button.is-offline .sync-dot { background: #e0a130; }
 .sync-button.is-error .sync-dot { background: #cc554f; }
 @keyframes syncPulse { to { opacity: .35; } }
 
