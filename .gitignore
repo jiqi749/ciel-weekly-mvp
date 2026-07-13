@@ -1,0 +1,4 @@
+/private-notes/
+.DS_Store
+*.backup.json
+ciel-backup-*.json
