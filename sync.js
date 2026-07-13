@@ -72,8 +72,21 @@
     return app.isStateEmpty(payload || {});
   }
 
+  function canonicalize(value) {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") {
+      return Object.keys(value)
+        .sort()
+        .reduce((result, key) => {
+          result[key] = canonicalize(value[key]);
+          return result;
+        }, {});
+    }
+    return value;
+  }
+
   function payloadsMatch(left, right) {
-    return JSON.stringify(left || {}) === JSON.stringify(right || {});
+    return JSON.stringify(canonicalize(left || {})) === JSON.stringify(canonicalize(right || {}));
   }
 
   function markSynced(remote) {
